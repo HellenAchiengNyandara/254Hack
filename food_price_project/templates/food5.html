@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load predictor_extras %}
+
+{% block title %}Make Prediction - Food Price Predictor{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-center">Food Price Prediction</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'make_prediction' %}">
+                        {% csrf_token %}
+                        {% for feature in top_6_features %}
+                        <div class="form-group mb-3">
+                            <label for="{{ feature }}">{{ feature|title }}</label>
+                            {% if feature in dropdown_options %}
+                            <select name="{{ feature }}" id="{{ feature }}" class="form-control" required>
+                                <option value="">Select {{ feature|title }}</option>
+                                {% for option in dropdown_options|get_item:feature %}
+                                <option value="{{ option }}">{{ option }}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <input type="number" step="any" name="{{ feature }}" id="{{ feature }}" class="form-control" required>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-primary w-100">Predict Price</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5">
+  <h2>Community Reporting</h2>
+  <p>Submit real-time price updates from your local market and help improve prediction accuracy.</p>
+  <form method="post" class="row g-3 mb-4">
+    {% csrf_token %}
+    <div class="col-md-3">
+      <label for="Commodity" class="form-label">Food Item (Commodity)</label>
+      <select class="form-select" id="Commodity" name="Commodity" required>
+        <option value="">Choose...</option>
+        {% for option in dropdown_options.Commodity %}
+          <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label for="Region" class="form-label">Region</label>
+      <select class="form-select" id="Region" name="Region" required>
+        <option value="">Choose...</option>
+        {% for option in dropdown_options.Region %}
+          <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label for="Market" class="form-label">Market Name</label>
+      <select class="form-select" id="Market" name="Market" required>
+        <option value="">Choose...</option>
+        {% for option in dropdown_options.Market %}
+          <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label for="price" class="form-label">Price (KES/kg)</label>
+      <input type="number" step="0.01" min="0" class="form-control" id="price" name="price" required>
+    </div>
+    <div class="col-md-1 align-self-end">
+      <button type="submit" class="btn btn-success">Submit</button>
+    </div>
+  </form>
+  {% if submitted %}
+    <div class="alert alert-success">Thank you for your report!</div>
+  {% endif %}
+  {% if reports %}
+    <h5>Recent Community Reports:</h5>
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered">
+        <thead>
+          <tr>
+            <th>Food Item</th>
+            <th>Region</th>
+            <th>Market</th>
+            <th>Price (KES/kg)</th>
+            <th>Submitted By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reports %}
+            <tr>
+              <td>{{ r.food_item }}</td>
+              <td>{{ r.region }}</td>
+              <td>{{ r.market }}</td>
+              <td>{{ r.price|floatformat:2 }}</td>
+              <td>{{ r.user }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endblock %} 

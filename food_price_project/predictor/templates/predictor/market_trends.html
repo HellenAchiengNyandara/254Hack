@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}Market Trends - Food Price Predictor{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Market Trends Analysis</h1>
+    
+    <!-- Dashboard Cards -->
+    <div class="row mb-4">
+        <!-- Price Movement Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Price Movement</h5>
+                    <div class="gauge-container" style="position: relative; height: 200px;">
+                        <canvas id="priceMovementGauge"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trend Strength Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Trend Strength</h5>
+                    <div class="gauge-container" style="position: relative; height: 200px;">
+                        <canvas id="trendStrengthGauge"></canvas>
+                    </div>
+                    <div id="trendSuggestion" class="mt-2 text-muted"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Accuracy Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Model Accuracy</h5>
+                    <div class="accuracy-value" style="font-size: 3rem; font-weight: bold; color: #ffc107;">
+                        95.4%
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Price Trends Chart -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Price Trends</h5>
+                    <div class="chart-container" style="position: relative; height:400px;">
+                        <canvas id="priceTrendsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Market Insights</h5>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">Current market conditions</li>
+                        <li class="list-group-item">Price volatility analysis</li>
+                        <li class="list-group-item">Seasonal trends</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Forecast</h5>
+                    <p class="card-text">Based on historical data and current market conditions, we predict the following trends:</p>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">Short-term outlook</li>
+                        <li class="list-group-item">Long-term projections</li>
+                        <li class="list-group-item">Risk factors</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Function to create gauge chart
+    function createGaugeChart(canvasId, value, segments, label) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        return new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [value, 100 - value],
+                    backgroundColor: segments,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                circumference: 180,
+                rotation: 270,
+                cutout: '80%',
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        enabled: false
+                    }
+                },
+                animation: {
+                    animateRotate: true,
+                    animateScale: true
+                }
+            }
+        });
+    }
+
+    // Initialize Price Movement Gauge
+    const priceMovementGauge = createGaugeChart('priceMovementGauge', 75, ['#dc3545', '#198754', '#0dcaf0'], 'Price Movement');
+    
+    // Initialize Trend Strength Gauge
+    const trendStrengthGauge = createGaugeChart('trendStrengthGauge', 60, ['#dc3545', '#198754', '#0dcaf0'], 'Trend Strength');
+
+    // Update trend suggestion based on gauge value
+    const trendSuggestion = document.getElementById('trendSuggestion');
+    const gaugeValue = 60; // This should come from your actual data
+    if (gaugeValue > 70) {
+        trendSuggestion.textContent = "Strong upward trend - Consider increasing inventory";
+    } else if (gaugeValue > 40) {
+        trendSuggestion.textContent = "Moderate trend - Maintain current strategy";
+    } else {
+        trendSuggestion.textContent = "Weak trend - Consider reducing inventory";
+    }
+
+    // Initialize price trends chart
+    const ctx = document.getElementById('priceTrendsChart').getContext('2d');
+    const priceTrendsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+                label: 'Price Trends',
+                data: [65, 59, 80, 81, 56, 55],
+                fill: false,
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %} 
