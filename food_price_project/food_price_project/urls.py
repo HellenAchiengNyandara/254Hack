@@ -32,4 +32,5 @@ urlpatterns = [
     path('', root_redirect, name='root'),
     path('predictor/', include('predictor.urls')),  # Include predictor URLs under /predictor/
     path('accounts/', include('userauth.urls')),  # Include userauth URLs
+    path('speech/', include('speech_analysis.urls')),  # Include speech analysis URLs
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

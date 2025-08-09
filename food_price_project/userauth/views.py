@@ -26,23 +26,27 @@ def register(request):
             sms_message = f"Welcome to Food Price Predictor! Your account has been created successfully."
             send_sms(full_phone, sms_message)
             
-            # Send welcome email
-            email_message = f"""
-            Welcome to Food Price Predictor!
-            
-            Your account has been created successfully.
-            You can now start making predictions and receive them via SMS and email.
-            
-            Best regards,
-            Food Price Predictor Team
-            """
-            send_mail(
-                'Welcome to Food Price Predictor',
-                email_message,
-                settings.EMAIL_HOST_USER,
-                [user.email],
-                fail_silently=False,
-            )
+            # Send welcome email (only if email is configured)
+            if settings.EMAIL_HOST_USER:
+                email_message = f"""
+                Welcome to Food Price Predictor!
+                
+                Your account has been created successfully.
+                You can now start making predictions and receive them via SMS and email.
+                
+                Best regards,
+                Food Price Predictor Team
+                """
+                try:
+                    send_mail(
+                        'Welcome to Food Price Predictor',
+                        email_message,
+                        settings.EMAIL_HOST_USER,
+                        [user.email],
+                        fail_silently=False,
+                    )
+                except Exception as e:
+                    messages.warning(request, 'Registration successful, but welcome email could not be sent.')
             
             messages.success(request, 'Registration successful! Welcome messages have been sent.')
             return redirect('home')

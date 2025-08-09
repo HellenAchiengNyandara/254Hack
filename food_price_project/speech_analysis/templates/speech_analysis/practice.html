@@ -1,0 +1,356 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Practice: {{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'speech_analysis:dashboard' %}">Speech Analysis</a></li>
+                    <li class="breadcrumb-item active">{{ task.title }}</li>
+                </ol>
+            </nav>
+            
+            <h1 class="mb-4">{{ task.title }}</h1>
+            <p class="lead">{{ task.description|default:"Complete this speaking exercise to improve your skills." }}</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Recording</h5>
+                    
+                    <div class="recording-controls mb-3">
+                        <button id="recordBtn" class="btn btn-primary me-2">
+                            <i class="fas fa-microphone"></i> Start Recording
+                        </button>
+                        <button id="stopBtn" class="btn btn-danger me-2" disabled>
+                            <i class="fas fa-stop"></i> Stop Recording
+                        </button>
+                        <button id="playBtn" class="btn btn-success me-2" disabled>
+                            <i class="fas fa-play"></i> Play
+                        </button>
+                        <button id="analyzeBtn" class="btn btn-info" disabled>
+                            <i class="fas fa-chart-line"></i> Analyze
+                        </button>
+                    </div>
+
+                    <audio id="audioPlayer" controls style="width: 100%; display: none;"></audio>
+                    
+                    <div id="recordingStatus" class="alert alert-info" style="display: none;">
+                        Ready to record...
+                    </div>
+
+                    <!-- Analysis Results -->
+                    <div id="analysisResults" style="display: none;">
+                        <hr>
+                        <h6>Analysis Results</h6>
+                        <div id="analysisContent"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Self Assessment Form -->
+            <div class="card" id="assessmentCard" style="display: none;">
+                <div class="card-body">
+                    <h5 class="card-title">Self Assessment</h5>
+                    <form id="assessmentForm">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="confidence" class="form-label">Confidence (1-10)</label>
+                                <input type="range" class="form-range" min="1" max="10" value="5" id="confidence">
+                                <div class="text-center"><span id="confidenceValue">5</span></div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="clarity" class="form-label">Clarity (1-10)</label>
+                                <input type="range" class="form-range" min="1" max="10" value="5" id="clarity">
+                                <div class="text-center"><span id="clarityValue">5</span></div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="pace" class="form-label">Pace (1-10)</label>
+                                <input type="range" class="form-range" min="1" max="10" value="5" id="pace">
+                                <div class="text-center"><span id="paceValue">5</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="reflection" class="form-label">Reflection</label>
+                            <textarea class="form-control" id="reflection" rows="3" 
+                                placeholder="What went well? What could you improve?"></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">Submit Assessment</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Task Guidelines -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Guidelines</h5>
+                    {% if task.task_id == 'short-presentation' %}
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success"></i> Keep it under 3 minutes</li>
+                            <li><i class="fas fa-check text-success"></i> Clear introduction and conclusion</li>
+                            <li><i class="fas fa-check text-success"></i> Use 2-3 main points</li>
+                            <li><i class="fas fa-check text-success"></i> Speak clearly and confidently</li>
+                        </ul>
+                    {% elif task.task_id == 'elevator-pitch' %}
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success"></i> 30-60 seconds maximum</li>
+                            <li><i class="fas fa-check text-success"></i> Introduce yourself</li>
+                            <li><i class="fas fa-check text-success"></i> Explain your value proposition</li>
+                            <li><i class="fas fa-check text-success"></i> End with a call to action</li>
+                        </ul>
+                    {% else %}
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success"></i> Be natural and authentic</li>
+                            <li><i class="fas fa-check text-success"></i> Maintain good pace</li>
+                            <li><i class="fas fa-check text-success"></i> Use appropriate pauses</li>
+                            <li><i class="fas fa-check text-success"></i> Speak with confidence</li>
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Tips</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-lightbulb text-warning"></i> Take a deep breath before starting</li>
+                        <li><i class="fas fa-lightbulb text-warning"></i> Make eye contact with imaginary audience</li>
+                        <li><i class="fas fa-lightbulb text-warning"></i> Use gestures naturally</li>
+                        <li><i class="fas fa-lightbulb text-warning"></i> Practice makes perfect!</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let mediaRecorder;
+let audioChunks = [];
+let currentRecordingId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const recordBtn = document.getElementById('recordBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const playBtn = document.getElementById('playBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const recordingStatus = document.getElementById('recordingStatus');
+
+    recordBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    playBtn.addEventListener('click', playRecording);
+    analyzeBtn.addEventListener('click', analyzeRecording);
+
+    // Range sliders
+    ['confidence', 'clarity', 'pace'].forEach(id => {
+        const slider = document.getElementById(id);
+        const value = document.getElementById(id + 'Value');
+        slider.addEventListener('input', () => {
+            value.textContent = slider.value;
+        });
+    });
+
+    // Assessment form
+    document.getElementById('assessmentForm').addEventListener('submit', submitAssessment);
+});
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => {
+            audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            await uploadRecording(audioBlob);
+        };
+
+        mediaRecorder.start();
+        
+        document.getElementById('recordBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('recordingStatus').style.display = 'block';
+        document.getElementById('recordingStatus').textContent = 'Recording...';
+        document.getElementById('recordingStatus').className = 'alert alert-danger';
+
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        alert('Error accessing microphone. Please check permissions.');
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        
+        document.getElementById('recordBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('recordingStatus').textContent = 'Processing recording...';
+        document.getElementById('recordingStatus').className = 'alert alert-warning';
+    }
+}
+
+async function uploadRecording(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+
+    try {
+        const response = await fetch('{% url "speech_analysis:upload_recording" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+            currentRecordingId = result.recording_id;
+            
+            // Create audio URL for playback
+            const audioUrl = URL.createObjectURL(audioBlob);
+            document.getElementById('audioPlayer').src = audioUrl;
+            document.getElementById('audioPlayer').style.display = 'block';
+            
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('analyzeBtn').disabled = false;
+            
+            document.getElementById('recordingStatus').textContent = 'Recording saved successfully!';
+            document.getElementById('recordingStatus').className = 'alert alert-success';
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        document.getElementById('recordingStatus').textContent = 'Error uploading recording: ' + error.message;
+        document.getElementById('recordingStatus').className = 'alert alert-danger';
+    }
+}
+
+function playRecording() {
+    const audioPlayer = document.getElementById('audioPlayer');
+    if (audioPlayer.paused) {
+        audioPlayer.play();
+    } else {
+        audioPlayer.pause();
+    }
+}
+
+async function analyzeRecording() {
+    if (!currentRecordingId) {
+        alert('No recording to analyze');
+        return;
+    }
+
+    try {
+        document.getElementById('analyzeBtn').disabled = true;
+        document.getElementById('analyzeBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+
+        const response = await fetch(`/speech/analyze/${currentRecordingId}/`);
+        const result = await response.json();
+
+        if (response.ok) {
+            showAnalysisResults(result);
+            document.getElementById('assessmentCard').style.display = 'block';
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Analysis error:', error);
+        alert('Error analyzing recording: ' + error.message);
+    } finally {
+        document.getElementById('analyzeBtn').disabled = false;
+        document.getElementById('analyzeBtn').innerHTML = '<i class="fas fa-chart-line"></i> Analyze';
+    }
+}
+
+function showAnalysisResults(results) {
+    const resultsHtml = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Metrics:</h6>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between">
+                        Speech Rate: <span class="badge bg-primary">${results.analysis.speech_rate.toFixed(1)} WPM</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        Pause Count: <span class="badge bg-info">${results.analysis.pause_count}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        Volume Variation: <span class="badge bg-success">${results.analysis.volume_variation.toFixed(3)}</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Feedback:</h6>
+                <ul class="list-group list-group-flush">
+                    ${results.feedback.map(feedback => `<li class="list-group-item">${feedback}</li>`).join('')}
+                </ul>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('analysisContent').innerHTML = resultsHtml;
+    document.getElementById('analysisResults').style.display = 'block';
+}
+
+async function submitAssessment(event) {
+    event.preventDefault();
+    
+    if (!currentRecordingId) {
+        alert('No recording to assess');
+        return;
+    }
+
+    const data = {
+        recordingId: currentRecordingId,
+        taskId: '{{ task.task_id }}',
+        confidence: parseInt(document.getElementById('confidence').value),
+        clarity: parseInt(document.getElementById('clarity').value),
+        pace: parseInt(document.getElementById('pace').value),
+        reflection: document.getElementById('reflection').value
+    };
+
+    try {
+        const response = await fetch('{% url "speech_analysis:submit_assessment" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Assessment submitted successfully!');
+            window.location.href = '{% url "speech_analysis:dashboard" %}';
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Assessment error:', error);
+        alert('Error submitting assessment: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

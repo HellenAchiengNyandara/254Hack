@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import sys
 from decouple import config
 
+
 load_dotenv()
 def main():
     """Run administrative tasks."""

@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'predictor',  # Your app for food price prediction
+    'speech_analysis',  # Speech analysis functionality
     'rest_framework',
     'rest_framework.authtoken',
     'crispy_forms',

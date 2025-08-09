@@ -1,0 +1,507 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Practice: {{ task.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .recording-stage {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 9999;
+        background: #000;
+    }
+    
+    .recording-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .recording-controls {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10000;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 20px;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+    
+    .timer-display {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #dc3545;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    
+    .progress-container {
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    
+    .stage-instructions,
+    .stage-playback {
+        min-height: 60vh;
+    }
+    
+    .virtual-scene-preview {
+        width: 100%;
+        height: 200px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 2px solid #ddd;
+    }
+    
+    .topic-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    .pulse {
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    
+    .countdown {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #dc3545;
+        text-align: center;
+        margin: 20px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="practiceContainer" class="container-fluid">
+    <!-- Navigation Breadcrumb -->
+    <div class="container mt-3">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'speech_analysis:dashboard' %}">Speech Analysis</a></li>
+                <li class="breadcrumb-item active">{{ task.title }}</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Instructions Stage -->
+    <div id="instructionsStage" class="container stage-instructions">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="text-center mb-4">
+                    <h1 class="display-4">{{ task.title }}</h1>
+                    <p class="lead">{{ task.description }}</p>
+                    <span class="badge bg-primary fs-6">Time Limit: {{ task.time_limit }} minute{{ task.time_limit|pluralize }}</span>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Instructions</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">{{ task.instructions }}</p>
+                        
+                        <!-- Virtual Scene Selection -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Choose Your Virtual Environment:</label>
+                            <div class="row">
+                                {% for scene_key, scene_name in virtual_scenes.items %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card scene-option" data-scene="{{ scene_key }}">
+                                        <video class="virtual-scene-preview" muted>
+                                            <source src="{% static 'videos/' %}{{ scene_key }}.mp4" type="video/mp4">
+                                        </video>
+                                        <div class="card-body text-center">
+                                            <input type="radio" name="virtualScene" value="{{ scene_key }}" id="scene-{{ scene_key }}"
+                                                   {% if forloop.first %}checked{% endif %} class="form-check-input me-2">
+                                            <label for="scene-{{ scene_key }}" class="form-check-label">{{ scene_name }}</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Impromptu Topic Display -->
+                        {% if task.task_id == 'impromptu-speech' and impromptu_topic %}
+                        <div class="topic-card">
+                            <h4><i class="fas fa-lightbulb me-2"></i>Your Topic</h4>
+                            <p class="fs-5 mb-3">{{ impromptu_topic }}</p>
+                            <button type="button" class="btn btn-outline-light" onclick="getNewTopic()">
+                                <i class="fas fa-sync-alt me-2"></i>Get New Topic
+                            </button>
+                        </div>
+                        {% endif %}
+
+                        <div class="text-center mt-4">
+                            <button id="startRecordingBtn" class="btn btn-success btn-lg pulse">
+                                <i class="fas fa-microphone me-2"></i>Start Recording
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Countdown Stage -->
+    <div id="countdownStage" class="container text-center" style="display: none;">
+        <div class="row justify-content-center align-items-center" style="height: 100vh;">
+            <div class="col-12">
+                <h2>Get Ready!</h2>
+                <div class="countdown" id="countdownTimer">3</div>
+                <p class="lead">Recording will start automatically...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recording Stage (Fullscreen) -->
+    <div id="recordingStage" class="recording-stage" style="display: none;">
+        <video id="backgroundVideo" class="recording-video" autoplay muted loop>
+            <source src="" type="video/mp4">
+        </video>
+        
+        <div class="recording-controls">
+            <div class="text-center">
+                <div class="timer-display" id="recordingTimer">{{ task.time_limit }}:00</div>
+                <div class="progress-container mb-3">
+                    <div class="progress">
+                        <div id="recordingProgress" class="progress-bar bg-danger" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="d-flex gap-3">
+                    <button id="pauseBtn" class="btn btn-warning">
+                        <i class="fas fa-pause me-2"></i>Pause
+                    </button>
+                    <button id="resumeBtn" class="btn btn-success" style="display: none;">
+                        <i class="fas fa-play me-2"></i>Resume
+                    </button>
+                    <button id="stopRecordingBtn" class="btn btn-danger">
+                        <i class="fas fa-stop me-2"></i>Stop Recording
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Playback Stage -->
+    <div id="playbackStage" class="container stage-playback" style="display: none;">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Recording Complete</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="mb-4">
+                            <h4>Duration: <span id="finalDuration">--:--</span></h4>
+                        </div>
+                        
+                        <audio id="audioPlayer" controls class="w-100 mb-4" style="max-width: 500px;">
+                            Your browser does not support the audio element.
+                        </audio>
+                        
+                        <div class="d-flex justify-content-center gap-3">
+                            <button id="reRecordBtn" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-redo me-2"></i>Re-record
+                            </button>
+                            <button id="submitRecordingBtn" class="btn btn-primary btn-lg">
+                                <i class="fas fa-paper-plane me-2"></i>Submit & Continue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global variables
+let mediaRecorder;
+let audioChunks = [];
+let currentRecordingId = null;
+let recordingTimer;
+let countdownTimer;
+let timeRemaining;
+let totalTime;
+let isPaused = false;
+let currentTopic = '{{ impromptu_topic|default:"" }}';
+
+// DOM elements
+const stages = {
+    instructions: document.getElementById('instructionsStage'),
+    countdown: document.getElementById('countdownStage'),
+    recording: document.getElementById('recordingStage'),
+    playback: document.getElementById('playbackStage')
+};
+
+const elements = {
+    startBtn: document.getElementById('startRecordingBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    resumeBtn: document.getElementById('resumeBtn'),
+    stopBtn: document.getElementById('stopRecordingBtn'),
+    reRecordBtn: document.getElementById('reRecordBtn'),
+    submitBtn: document.getElementById('submitRecordingBtn'),
+    timer: document.getElementById('recordingTimer'),
+    progress: document.getElementById('recordingProgress'),
+    audioPlayer: document.getElementById('audioPlayer'),
+    backgroundVideo: document.getElementById('backgroundVideo'),
+    countdownDisplay: document.getElementById('countdownTimer'),
+    durationDisplay: document.getElementById('finalDuration')
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    totalTime = {{ task.time_limit }} * 60; // Convert minutes to seconds
+    timeRemaining = totalTime;
+    
+    // Event listeners
+    elements.startBtn.addEventListener('click', startCountdown);
+    elements.pauseBtn.addEventListener('click', pauseRecording);
+    elements.resumeBtn.addEventListener('click', resumeRecording);
+    elements.stopBtn.addEventListener('click', stopRecording);
+    elements.reRecordBtn.addEventListener('click', reRecord);
+    elements.submitBtn.addEventListener('click', submitRecording);
+    
+    // Scene selection hover effects
+    document.querySelectorAll('.scene-option').forEach(option => {
+        const video = option.querySelector('video');
+        option.addEventListener('mouseenter', () => video.play());
+        option.addEventListener('mouseleave', () => video.pause());
+        option.addEventListener('click', () => {
+            const radio = option.querySelector('input[type="radio"]');
+            radio.checked = true;
+        });
+    });
+});
+
+function showStage(stageName) {
+    Object.values(stages).forEach(stage => stage.style.display = 'none');
+    stages[stageName].style.display = 'block';
+    
+    // Update URL to hide sidebar during recording
+    if (stageName === 'recording') {
+        const url = new URL(window.location);
+        url.searchParams.set('stage', 'recording');
+        window.history.pushState({}, '', url);
+    } else {
+        const url = new URL(window.location);
+        url.searchParams.delete('stage');
+        window.history.pushState({}, '', url);
+    }
+}
+
+function startCountdown() {
+    showStage('countdown');
+    let count = 3;
+    elements.countdownDisplay.textContent = count;
+    
+    countdownTimer = setInterval(() => {
+        count--;
+        if (count > 0) {
+            elements.countdownDisplay.textContent = count;
+        } else {
+            clearInterval(countdownTimer);
+            startRecording();
+        }
+    }, 1000);
+}
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => {
+            audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            uploadRecording(audioBlob);
+        };
+
+        // Set up background video
+        const selectedScene = document.querySelector('input[name="virtualScene"]:checked').value;
+        elements.backgroundVideo.src = `{% static 'videos/' %}${selectedScene}.mp4`;
+        
+        // Start recording and show recording stage
+        mediaRecorder.start();
+        showStage('recording');
+        startTimer();
+
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        alert('Error accessing microphone. Please check permissions.');
+        showStage('instructions');
+    }
+}
+
+function startTimer() {
+    recordingTimer = setInterval(() => {
+        if (!isPaused && timeRemaining > 0) {
+            timeRemaining--;
+            updateTimerDisplay();
+            updateProgress();
+            
+            if (timeRemaining <= 0) {
+                stopRecording();
+            }
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay() {
+    const minutes = Math.floor(timeRemaining / 60);
+    const seconds = timeRemaining % 60;
+    elements.timer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function updateProgress() {
+    const elapsed = totalTime - timeRemaining;
+    const percentage = (elapsed / totalTime) * 100;
+    elements.progress.style.width = `${percentage}%`;
+}
+
+function pauseRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.pause();
+        isPaused = true;
+        elements.pauseBtn.style.display = 'none';
+        elements.resumeBtn.style.display = 'inline-block';
+    }
+}
+
+function resumeRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'paused') {
+        mediaRecorder.resume();
+        isPaused = false;
+        elements.pauseBtn.style.display = 'inline-block';
+        elements.resumeBtn.style.display = 'none';
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        clearInterval(recordingTimer);
+        
+        // Stop all tracks
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+}
+
+async function uploadRecording(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    formData.append('taskId', '{{ task.task_id }}');
+    formData.append('duration', totalTime - timeRemaining);
+    formData.append('virtualScene', document.querySelector('input[name="virtualScene"]:checked').value);
+    formData.append('topic', currentTopic);
+
+    try {
+        const response = await fetch('{% url "speech_analysis:upload_recording" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+            currentRecordingId = result.recording_id;
+            
+            // Create audio URL for playback
+            const audioUrl = URL.createObjectURL(audioBlob);
+            elements.audioPlayer.src = audioUrl;
+            
+            // Update duration display
+            const duration = totalTime - timeRemaining;
+            const minutes = Math.floor(duration / 60);
+            const seconds = duration % 60;
+            elements.durationDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            showStage('playback');
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert('Error uploading recording: ' + error.message);
+        showStage('instructions');
+    }
+}
+
+function reRecord() {
+    // Reset everything
+    timeRemaining = totalTime;
+    isPaused = false;
+    currentRecordingId = null;
+    audioChunks = [];
+    
+    // Reset UI
+    elements.progress.style.width = '0%';
+    elements.pauseBtn.style.display = 'inline-block';
+    elements.resumeBtn.style.display = 'none';
+    
+    showStage('instructions');
+}
+
+async function submitRecording() {
+    if (!currentRecordingId) {
+        alert('No recording to submit');
+        return;
+    }
+
+    // Redirect to assessment page or dashboard
+    window.location.href = '{% url "speech_analysis:dashboard" %}';
+}
+
+async function getNewTopic() {
+    try {
+        const response = await fetch('{% url "speech_analysis:random_topic" %}');
+        const data = await response.json();
+        
+        if (response.ok) {
+            currentTopic = data.topic;
+            document.querySelector('.topic-card p').textContent = data.topic;
+        } else {
+            console.error('Error getting new topic:', data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// Format time helper
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+</script>
+{% endblock %}

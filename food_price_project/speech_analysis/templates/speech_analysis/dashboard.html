@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Speech Analysis Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Speech Analysis Dashboard</h1>
+            <p class="lead">Improve your public speaking skills with AI-powered analysis</p>
+        </div>
+    </div>
+
+    <!-- Quick Recording Section -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Practice Session</h5>
+                    <p class="card-text">Record yourself speaking for instant feedback</p>
+                    
+                    <div class="recording-controls mb-3">
+                        <button id="recordBtn" class="btn btn-primary me-2">
+                            <i class="fas fa-microphone"></i> Start Recording
+                        </button>
+                        <button id="stopBtn" class="btn btn-danger me-2" disabled>
+                            <i class="fas fa-stop"></i> Stop Recording
+                        </button>
+                        <button id="playBtn" class="btn btn-success me-2" disabled>
+                            <i class="fas fa-play"></i> Play
+                        </button>
+                        <button id="analyzeBtn" class="btn btn-info" disabled>
+                            <i class="fas fa-chart-line"></i> Analyze
+                        </button>
+                    </div>
+
+                    <audio id="audioPlayer" controls style="width: 100%; display: none;"></audio>
+                    
+                    <div id="recordingStatus" class="alert alert-info" style="display: none;">
+                        Ready to record...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Stats</h5>
+                    <div class="mb-2">
+                        <strong>Total Sessions:</strong> {{ recent_sessions|length }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>This Week:</strong> 
+                        {% for session in recent_sessions %}
+                            {% if forloop.counter <= 7 %}1{% endif %}
+                        {% empty %}0{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Speaking Tasks Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3>Practice Tasks</h3>
+            <div class="row">
+                {% for task in tasks %}
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ task.title }}</h5>
+                            <p class="card-text">{{ task.description|default:"Practice this speaking exercise to improve your skills." }}</p>
+                            <a href="{% url 'speech_analysis:practice_task' task.task_id %}" class="btn btn-outline-primary">
+                                Start Practice
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Sessions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3>Recent Sessions</h3>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Task</th>
+                            <th>Average Score</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for session in recent_sessions %}
+                        <tr>
+                            <td>{{ session.session_date|date:"M d, Y" }}</td>
+                            <td>
+                                {% if session.assessment.task %}
+                                    {{ session.assessment.task.title }}
+                                {% else %}
+                                    Free Practice
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if session.assessment %}
+                                    <span class="badge bg-primary">{{ session.assessment.average_score }}/10</span>
+                                {% else %}
+                                    <span class="text-muted">No assessment</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" onclick="viewSession({{ session.id }})">
+                                    View Details
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">No sessions yet. Start your first recording!</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis Results Modal -->
+    <div class="modal fade" id="analysisModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Speech Analysis Results</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="analysisResults">
+                        <!-- Analysis results will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let mediaRecorder;
+let audioChunks = [];
+let currentRecordingId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const recordBtn = document.getElementById('recordBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const playBtn = document.getElementById('playBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const recordingStatus = document.getElementById('recordingStatus');
+
+    recordBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    playBtn.addEventListener('click', playRecording);
+    analyzeBtn.addEventListener('click', analyzeRecording);
+});
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => {
+            audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            await uploadRecording(audioBlob);
+        };
+
+        mediaRecorder.start();
+        
+        document.getElementById('recordBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('recordingStatus').style.display = 'block';
+        document.getElementById('recordingStatus').textContent = 'Recording...';
+        document.getElementById('recordingStatus').className = 'alert alert-danger';
+
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        alert('Error accessing microphone. Please check permissions.');
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        
+        document.getElementById('recordBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('recordingStatus').textContent = 'Processing recording...';
+        document.getElementById('recordingStatus').className = 'alert alert-warning';
+    }
+}
+
+async function uploadRecording(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+
+    try {
+        const response = await fetch('{% url "speech_analysis:upload_recording" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+            currentRecordingId = result.recording_id;
+            
+            // Create audio URL for playback
+            const audioUrl = URL.createObjectURL(audioBlob);
+            document.getElementById('audioPlayer').src = audioUrl;
+            document.getElementById('audioPlayer').style.display = 'block';
+            
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('analyzeBtn').disabled = false;
+            
+            document.getElementById('recordingStatus').textContent = 'Recording saved successfully!';
+            document.getElementById('recordingStatus').className = 'alert alert-success';
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        document.getElementById('recordingStatus').textContent = 'Error uploading recording: ' + error.message;
+        document.getElementById('recordingStatus').className = 'alert alert-danger';
+    }
+}
+
+function playRecording() {
+    const audioPlayer = document.getElementById('audioPlayer');
+    if (audioPlayer.paused) {
+        audioPlayer.play();
+    } else {
+        audioPlayer.pause();
+    }
+}
+
+async function analyzeRecording() {
+    if (!currentRecordingId) {
+        alert('No recording to analyze');
+        return;
+    }
+
+    try {
+        document.getElementById('analyzeBtn').disabled = true;
+        document.getElementById('analyzeBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+
+        const response = await fetch(`/speech/analyze/${currentRecordingId}/`);
+        const result = await response.json();
+
+        if (response.ok) {
+            showAnalysisResults(result);
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Analysis error:', error);
+        alert('Error analyzing recording: ' + error.message);
+    } finally {
+        document.getElementById('analyzeBtn').disabled = false;
+        document.getElementById('analyzeBtn').innerHTML = '<i class="fas fa-chart-line"></i> Analyze';
+    }
+}
+
+function showAnalysisResults(results) {
+    const resultsHtml = `
+        <h6>Analysis Results</h6>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Metrics:</h6>
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between">
+                        Speech Rate: <span class="badge bg-primary">${results.analysis.speech_rate.toFixed(1)} WPM</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        Pause Count: <span class="badge bg-info">${results.analysis.pause_count}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        Volume Variation: <span class="badge bg-success">${results.analysis.volume_variation.toFixed(3)}</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Feedback:</h6>
+                <ul class="list-group">
+                    ${results.feedback.map(feedback => `<li class="list-group-item">${feedback}</li>`).join('')}
+                </ul>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('analysisResults').innerHTML = resultsHtml;
+    new bootstrap.Modal(document.getElementById('analysisModal')).show();
+}
+
+function viewSession(sessionId) {
+    // Implementation for viewing session details
+    console.log('Viewing session:', sessionId);
+}
+</script>
+{% endblock %}
